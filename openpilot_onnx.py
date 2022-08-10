@@ -1,3 +1,4 @@
+from weakref import ref
 import cv2
 import json
 import numpy as np
@@ -37,8 +38,8 @@ def seperate_points_and_std_values(df):
 
 def main():
 	model = "supercombo.onnx"
-	
-	cap = cv2.VideoCapture('data/cropped_plats.mp4')
+	# 30km/h
+	cap = cv2.VideoCapture('cam09 08 2022 - 09 25 11.mp4') 
 	parsed_images = []
 
 	width = 512
@@ -57,28 +58,29 @@ def main():
 	road_start_idx = lane_lines_prob_end_idx
 	road_end_idx = road_start_idx + 264
 
-# 	lead_start_idx = road_end_idx
-# 	lead_end_idx = lead_start_idx + 55
-# 	
-# 	lead_prob_start_idx = lead_end_idx
-# 	lead_prob_end_idx = lead_prob_start_idx + 3
-# 	
-# 	desire_start_idx = lead_prob_end_idx
-# 	desire_end_idx = desire_start_idx + 72
-# 	
-# 	meta_start_idx = desire_end_idx
-# 	meta_end_idx = meta_start_idx + 32
-# 	
-# 	desire_pred_start_idx = meta_end_idx
-# 	desire_pred_end_idx = desire_pred_start_idx + 32
-# 	
-# 	pose_start_idx = desire_pred_end_idx
-# 	pose_end_idx = pose_start_idx + 12
-# 	
-# 	rnn_start_idx = pose_end_idx
-# 	rnn_end_idx = rnn_start_idx + 908
+	lead_start_idx = road_end_idx
+	lead_end_idx = lead_start_idx + 55
 	
-	session = onnxruntime.InferenceSession(model, None)
+	lead_prob_start_idx = lead_end_idx
+	lead_prob_end_idx = lead_prob_start_idx + 3
+	
+	desire_start_idx = lead_prob_end_idx
+	desire_end_idx = desire_start_idx + 72
+	
+	meta_start_idx = desire_end_idx
+	meta_end_idx = meta_start_idx + 32
+	
+	desire_pred_start_idx = meta_end_idx
+	desire_pred_end_idx = desire_pred_start_idx + 32
+	
+	pose_start_idx = desire_pred_end_idx
+	pose_end_idx = pose_start_idx + 12
+	
+	rnn_start_idx = pose_end_idx
+	rnn_end_idx = rnn_start_idx + 908
+	
+	session = onnxruntime.InferenceSession(model, providers=['CUDAExecutionProvider',
+                                                               'CPUExecutionProvider'])
 	while(cap.isOpened()):
 
 		ret, frame = cap.read()
@@ -110,13 +112,14 @@ def main():
 			output_name = session.get_outputs()[0].name
 			
 			desire_data = np.array([0]).astype('float32')
-			desire_data.resize((1,8))
+			desire_data.resize((1,8),refcheck=False)
+			
 			
 			traffic_convention_data = np.array([0]).astype('float32')
-			traffic_convention_data.resize((1,512))
+			traffic_convention_data.resize((1,512), refcheck= False)
 			
 			initial_state_data = np.array([0]).astype('float32')
-			initial_state_data.resize((1,2))
+			initial_state_data.resize((1,2), refcheck=False)
 
 			result = session.run([output_name], {input_imgs: data,
 												desire: desire_data,
@@ -126,17 +129,17 @@ def main():
 
 			res = np.array(result)
 
-			# plan = res[:,:,plan_start_idx:plan_end_idx]
+			plan = res[:,:,plan_start_idx:plan_end_idx]
 			lanes = res[:,:,lanes_start_idx:lanes_end_idx]
-			# lane_lines_prob = res[:,:,lane_lines_prob_start_idx:lane_lines_prob_end_idx]
+			lane_lines_prob = res[:,:,lane_lines_prob_start_idx:lane_lines_prob_end_idx]
 			lane_road = res[:,:,road_start_idx:road_end_idx]
-			# lead = res[:,:,lead_start_idx:lead_end_idx]
-			# lead_prob = res[:,:,lead_prob_start_idx:lead_prob_end_idx]
-			# desire_state = res[:,:,desire_start_idx:desire_end_idx]
-			# meta = res[:,:,meta_start_idx:meta_end_idx]
-			# desire_pred = res[:,:,desire_pred_start_idx:desire_pred_end_idx]
-			# pose = res[:,:,pose_start_idx:pose_end_idx]
-			# recurrent_layer = res[:,:,rnn_start_idx:rnn_end_idx]
+			lead = res[:,:,lead_start_idx:lead_end_idx]
+			lead_prob = res[:,:,lead_prob_start_idx:lead_prob_end_idx]
+			desire_state = res[:,:,desire_start_idx:desire_end_idx]
+			meta = res[:,:,meta_start_idx:meta_end_idx]
+			desire_pred = res[:,:,desire_pred_start_idx:desire_pred_end_idx]
+			pose = res[:,:,pose_start_idx:pose_end_idx]
+			recurrent_layer = res[:,:,rnn_start_idx:rnn_end_idx]
 
 			lanes_flat = lanes.flatten()
 			df_lanes = pd.DataFrame(lanes_flat)
